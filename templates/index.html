@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KRX 외국인 수급 조회</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <section class="panel query-panel">
+      <div>
+        <p class="eyebrow">KRX Data</p>
+        <h1>외국인 수급 조회</h1>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="messages">
+            {% for category, message in messages %}
+              <p class="message {{ category }}">{{ message }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <form method="post" class="query-form">
+        <div class="field two">
+          <label for="krx_id">KRX 아이디</label>
+          <input id="krx_id" name="krx_id" value="{{ form.krx_id }}" autocomplete="username" required>
+        </div>
+
+        <div class="field two">
+          <label for="krx_pw">KRX 비밀번호</label>
+          <input id="krx_pw" name="krx_pw" type="password" value="{{ form.krx_pw }}" autocomplete="current-password" required>
+        </div>
+
+        <div class="field">
+          <label for="trade_date">조회일</label>
+          <input id="trade_date" name="trade_date" type="date" value="{{ form.trade_date }}" required>
+        </div>
+
+        <div class="field">
+          <label for="market">시장</label>
+          <select id="market" name="market">
+            {% for market in markets %}
+              <option value="{{ market }}" {% if form.market == market %}selected{% endif %}>{{ market }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="stock_code">종목코드</label>
+          <input id="stock_code" name="stock_code" value="{{ form.stock_code }}" inputmode="numeric" pattern="[0-9]{6}" placeholder="예: 005930">
+        </div>
+
+        <button type="submit">조회하기</button>
+      </form>
+    </section>
+
+    {% if result %}
+      <section class="result-grid">
+        <article class="panel summary-panel">
+          <div class="section-head">
+            <p class="eyebrow">{{ result.display_date }} · {{ result.market }}</p>
+            <h2>요약</h2>
+          </div>
+
+          {% if result.summary %}
+            <dl class="summary-list">
+              {% for key, label in summary_labels.items() %}
+                {% if key in result.summary %}
+                  <div>
+                    <dt>{{ label }}</dt>
+                    <dd>{{ result.summary[key] | number }}</dd>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </dl>
+          {% else %}
+            <p class="empty">외국인 행을 찾지 못했습니다. 아래 원본 행을 확인해 주세요.</p>
+          {% endif %}
+        </article>
+
+        <article class="panel table-panel">
+          <div class="section-head">
+            <p class="eyebrow">전체 {{ result.row_count | number }}행 · 외국인 {{ result.foreign_rows | length | number }}행</p>
+            <h2>조회 결과</h2>
+          </div>
+
+          {% set rows = result.foreign_rows if result.foreign_rows else result.all_rows %}
+          {% if rows %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {% for column in rows[0].keys() %}
+                      <th>{{ column }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in rows %}
+                    <tr>
+                      {% for value in row.values() %}
+                        <td>{{ value }}</td>
+                      {% endfor %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="empty">표시할 데이터가 없습니다.</p>
+          {% endif %}
+        </article>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>
