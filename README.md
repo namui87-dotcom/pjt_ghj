@@ -24,7 +24,7 @@ python app.py
 
 ## Vercel
 
-Vercel은 루트의 `app.py`에 노출된 Flask `app`을 자동으로 감지합니다. GitHub 저장소를 Vercel 프로젝트로 가져오면 `main` 브랜치 푸시마다 자동 배포됩니다.
+Vercel은 루트의 `app.py`에 노출된 Flask `app`을 자동으로 감지합니다. GitHub 저장소를 Vercel 프로젝트로 가져오면 `main` 브랜치 푸시마다 자동 배포됩니다. 함수 실행시간은 Vercel 프로젝트의 Functions 설정에서 사용하는 요금제 한도 내 최댓값으로 설정하는 것을 권장합니다.
 
 필수 환경변수:
 

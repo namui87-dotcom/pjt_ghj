@@ -1,0 +1,13 @@
+.git/
+.vercel/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+outputs/
+test_output/
+test_output_full/
+tests/
+*.xlsx
+*.ipynb
+프로젝트_대신_0624/
