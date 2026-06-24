@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import date, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -14,9 +15,61 @@ class DashboardTests(unittest.TestCase):
         response = client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["status"], "ok")
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
 
     def test_parse_date(self):
         self.assertEqual(dashboard.parse_yyyymmdd("2026-06-24"), date(2026, 6, 24))
+
+    def test_future_date_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "오늘 이후"):
+            dashboard.validate_collection_input(
+                "user",
+                "password",
+                date(date.today().year + 1, 1, 1),
+                "ALL",
+            )
+
+    def test_post_requires_csrf(self):
+        client = dashboard.app.test_client()
+        response = client.post("/", data={
+            "krx_id": "user",
+            "krx_pw": "password",
+            "as_of": date.today().isoformat(),
+            "market": "ALL",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("요청 인증이 만료되었습니다".encode("utf-8"), response.data)
+
+    def test_valid_csrf_reaches_collection(self):
+        client = dashboard.app.test_client()
+        client.get("/")
+        with client.session_transaction() as flask_session:
+            csrf_token = flask_session["csrf_token"]
+
+        fake_result = dashboard.RunResult(
+            output_path=Path("result.xlsx"),
+            base_rows=1,
+            last_rows=1,
+            trading_dates=["20260623"],
+            charts=[],
+            top_rows=[],
+        )
+        with (
+            patch.object(dashboard, "run_collection", return_value=fake_result),
+            patch.object(dashboard, "register_download", return_value="download-token"),
+        ):
+            response = client.post("/", data={
+                "csrf_token": csrf_token,
+                "krx_id": "user",
+                "krx_pw": "password",
+                "as_of": date.today().isoformat(),
+                "market": "ALL",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"/download/download-token", response.data)
 
     def test_pivot_and_excel(self):
         rows = []

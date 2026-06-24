@@ -20,7 +20,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-from flask import Flask, flash, render_template_string, request as flask_request, send_file
+from flask import Flask, flash, render_template_string, request as flask_request, send_file, session
 from markupsafe import escape
 
 
@@ -71,6 +71,7 @@ DOWNLOAD_TTL_SECONDS = 30 * 60
 RECENT_TRADING_DAYS = 5
 MAX_CALENDAR_LOOKBACK = 20
 REQUEST_TIMEOUT = 30
+MAX_CREDENTIAL_LENGTH = 200
 
 
 @dataclass(frozen=True)
@@ -217,6 +218,17 @@ def parse_yyyymmdd(value: str) -> date:
     if not re.fullmatch(r"\d{8}", digits):
         raise ValueError("날짜는 YYYYMMDD 또는 YYYY-MM-DD 형식이어야 합니다.")
     return datetime.strptime(digits, "%Y%m%d").date()
+
+
+def validate_collection_input(krx_id: str, krx_pw: str, as_of: date, market: str) -> None:
+    if not krx_id or not krx_pw:
+        raise ValueError("KRX 아이디와 비밀번호를 모두 입력해야 합니다.")
+    if len(krx_id) > MAX_CREDENTIAL_LENGTH or len(krx_pw) > MAX_CREDENTIAL_LENGTH:
+        raise ValueError("로그인 정보의 길이가 올바르지 않습니다.")
+    if market not in MARKET_CODES:
+        raise ValueError(f"시장은 {', '.join(MARKET_CODES)} 중 하나여야 합니다.")
+    if as_of > date.today():
+        raise ValueError("기준일은 오늘 이후 날짜로 지정할 수 없습니다.")
 
 
 def to_int(value: Any) -> int:
@@ -502,8 +514,7 @@ def run_collection(
     market: str,
     output_root: Path,
 ) -> RunResult:
-    if not krx_id or not krx_pw:
-        raise ValueError("KRX 아이디와 비밀번호를 모두 입력해야 합니다.")
+    validate_collection_input(krx_id, krx_pw, as_of, market)
 
     now = datetime.now()
     out_dir = output_root / now.strftime("%Y%m%d")
@@ -560,6 +571,46 @@ def register_download(output_path: Path) -> str:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "ghj-codex-local-secret")
+app.config.update(
+    MAX_CONTENT_LENGTH=32 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=IS_VERCEL,
+)
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'"
+    )
+    return response
+
+
+def get_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def validate_csrf_token(submitted_token: str) -> None:
+    expected_token = session.get("csrf_token", "")
+    if not expected_token or not submitted_token or not secrets.compare_digest(expected_token, submitted_token):
+        raise ValueError("요청 인증이 만료되었습니다. 페이지를 새로고침한 뒤 다시 실행해 주세요.")
 
 PAGE_TEMPLATE = """
 <!doctype html>
@@ -859,6 +910,7 @@ PAGE_TEMPLATE = """
       {% endwith %}
 
       <form method="post" id="collect-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="field span2">
           <label for="krx_id">KRX 아이디</label>
           <input id="krx_id" name="krx_id" value="{{ form.krx_id }}" autocomplete="username" required>
@@ -891,6 +943,7 @@ PAGE_TEMPLATE = """
         <div class="fixed-scope">
           <strong>분석 기간은 자동 고정됩니다.</strong>
           기준일 기준 6개월 누적, 3개월 누적, 1개월 누적을 조회하고, 1개월보다 짧은 구간은 기존 노트북처럼 최근 거래일 5개를 일별로 조회합니다. 주말과 휴장일은 프로그램이 자동으로 건너뜁니다.
+          Vercel에서는 결과 파일이 임시 저장되므로 분석 완료 직후 내려받는 것을 권장합니다.
         </div>
       </form>
 
@@ -967,6 +1020,11 @@ PAGE_TEMPLATE = """
     const percent = document.getElementById("percent");
     if (form) {
       form.addEventListener("submit", () => {
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = "분석 실행 중...";
+        }
         loading.classList.add("active");
         let value = 0;
         const timer = setInterval(() => {
@@ -1067,6 +1125,7 @@ def index():
         krx_pw = flask_request.form.get("krx_pw", "")
 
         try:
+            validate_csrf_token(flask_request.form.get("csrf_token", ""))
             result = run_collection(
                 krx_id=form["krx_id"],
                 krx_pw=krx_pw,
@@ -1084,14 +1143,18 @@ def index():
                 download_token=register_download(result.output_path),
             )
             flash("수집과 분석이 완료되었습니다. 엑셀 파일은 30분 동안 다운로드할 수 있습니다.", "success")
-        except Exception as exc:
+        except (ValueError, RuntimeError) as exc:
             flash(str(exc), "error")
+        except Exception:
+            app.logger.exception("Unexpected collection failure")
+            flash("처리 중 예상하지 못한 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", "error")
 
     return render_template_string(
         PAGE_TEMPLATE,
         form=form,
         markets=MARKET_CODES.keys(),
         result=result,
+        csrf_token=get_csrf_token(),
     )
 
 
@@ -1106,6 +1169,11 @@ def download(token: str):
         DOWNLOADS.pop(token, None)
         return "다운로드 링크가 만료되었습니다. 분석을 다시 실행해 주세요.", 410
     return send_file(output_path, as_attachment=True, download_name=output_path.name)
+
+
+@app.errorhandler(413)
+def request_too_large(_error):
+    return "요청 크기가 허용 범위를 초과했습니다.", 413
 
 
 @app.route("/health")
