@@ -380,6 +380,19 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
 
     plt.rcParams["font.family"] = ["Malgun Gothic", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
+    plt.rcParams.update({
+        "figure.facecolor": "#06110d",
+        "axes.facecolor": "#081a14",
+        "axes.edgecolor": "#39ff88",
+        "axes.labelcolor": "#c8ffe0",
+        "text.color": "#e7fff1",
+        "xtick.color": "#8affb8",
+        "ytick.color": "#8affb8",
+        "grid.color": "#1f6b4b",
+        "legend.facecolor": "#0a2119",
+        "legend.edgecolor": "#39ff88",
+        "legend.labelcolor": "#e7fff1",
+    })
 
     df_clean = last_df.fillna(0).copy()
 
@@ -388,12 +401,12 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
         plot_df = df_clean.loc[top10_idx, [("1개월누적", "외국인"), ("1개월누적", "기관합계")]].copy()
         plot_df.columns = ["외국인", "기관합계"]
         fig, ax = plt.subplots(figsize=(11, 5.8))
-        plot_df.plot(kind="bar", ax=ax, color=["#0b8069", "#3858a8"])
+        plot_df.plot(kind="bar", ax=ax, color=["#39ff88", "#00e5ff"])
         ax.set_title("1개월누적 외국인 순매수 TOP10")
         ax.set_xlabel("")
         ax.set_ylabel("순매수 수량")
         ax.set_xticklabels(stock_names_from_index(plot_df.index), rotation=35, ha="right")
-        ax.axhline(0, color="#263238", linewidth=1)
+        ax.axhline(0, color="#d9ff00", linewidth=1)
         ax.grid(axis="y", alpha=0.25)
         add_chart(charts, "1개월누적 외국인 TOP10", fig)
 
@@ -402,11 +415,11 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
             df_clean[("1개월누적", "외국인")],
             df_clean[("1개월누적", "기관합계")],
             alpha=0.35,
-            color="#0b8069",
+            color="#39ff88",
             s=18,
         )
-        ax.axhline(0, color="#263238", linewidth=1)
-        ax.axvline(0, color="#263238", linewidth=1)
+        ax.axhline(0, color="#d9ff00", linewidth=1)
+        ax.axvline(0, color="#d9ff00", linewidth=1)
         ax.set_title("외국인 vs 기관합계 산점도")
         ax.set_xlabel("외국인 순매수")
         ax.set_ylabel("기관합계 순매수")
@@ -418,7 +431,7 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
         heat_df.columns = [f"{period}_{buyer}" for period, buyer in heat_df.columns]
         heat_df.index = stock_names_from_index(heat_df.index)
         fig, ax = plt.subplots(figsize=(13, 8))
-        image = ax.imshow(heat_df.values, aspect="auto", cmap="coolwarm")
+        image = ax.imshow(heat_df.values, aspect="auto", cmap="viridis")
         ax.set_title("외국인 순매수 TOP20 기간별 수급 히트맵")
         ax.set_xticks(range(len(heat_df.columns)))
         ax.set_xticklabels(heat_df.columns, rotation=45, ha="right")
@@ -437,12 +450,12 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
         inst_mean = df_clean.xs("기관합계", level=1, axis=1)[recent_periods].mean()
         fig, ax = plt.subplots(figsize=(10, 5.4))
         x = range(len(recent_periods))
-        ax.bar([v - 0.18 for v in x], foreign_mean.values, width=0.36, label="외국인", color="#0b8069")
-        ax.bar([v + 0.18 for v in x], inst_mean.values, width=0.36, label="기관합계", color="#3858a8")
+        ax.bar([v - 0.18 for v in x], foreign_mean.values, width=0.36, label="외국인", color="#39ff88")
+        ax.bar([v + 0.18 for v in x], inst_mean.values, width=0.36, label="기관합계", color="#00e5ff")
         ax.set_xticks(list(x))
         ax.set_xticklabels(recent_periods)
         ax.set_title("최근 영업일 평균 순매수")
-        ax.axhline(0, color="#263238", linewidth=1)
+        ax.axhline(0, color="#d9ff00", linewidth=1)
         ax.grid(axis="y", alpha=0.25)
         ax.legend()
         add_chart(charts, "최근 영업일 평균", fig)
@@ -457,12 +470,12 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
         inst_acc = df_clean.xs("기관합계", level=1, axis=1)[acc_periods].mean()
         fig, ax = plt.subplots(figsize=(8.5, 5.2))
         x = range(len(acc_periods))
-        ax.bar([v - 0.18 for v in x], foreign_acc.values, width=0.36, label="외국인", color="#0b8069")
-        ax.bar([v + 0.18 for v in x], inst_acc.values, width=0.36, label="기관합계", color="#3858a8")
+        ax.bar([v - 0.18 for v in x], foreign_acc.values, width=0.36, label="외국인", color="#39ff88")
+        ax.bar([v + 0.18 for v in x], inst_acc.values, width=0.36, label="기관합계", color="#00e5ff")
         ax.set_xticks(list(x))
         ax.set_xticklabels(acc_periods)
         ax.set_title("1개월 / 3개월 / 6개월 누적 평균 순매수")
-        ax.axhline(0, color="#263238", linewidth=1)
+        ax.axhline(0, color="#d9ff00", linewidth=1)
         ax.grid(axis="y", alpha=0.25)
         ax.legend()
         add_chart(charts, "누적 평균 비교", fig)
@@ -621,43 +634,110 @@ PAGE_TEMPLATE = """
   <title>GHJ KRX 수급 자동화</title>
   <style>
     :root {
-      --bg: #f3f6f5;
-      --panel: #fff;
-      --text: #1d282b;
-      --muted: #637176;
-      --line: #d8e2e3;
-      --accent: #0b8069;
-      --accent-dark: #096653;
-      --danger: #b3261e;
-      --success: #166534;
+      color-scheme: dark;
+      --bg: #020806;
+      --panel: rgba(5, 22, 16, .92);
+      --panel-2: #081a14;
+      --text: #e7fff1;
+      --muted: #82b89b;
+      --line: rgba(57, 255, 136, .32);
+      --accent: #39ff88;
+      --accent-2: #00e5ff;
+      --accent-hot: #d9ff00;
+      --accent-dark: #13c86a;
+      --danger: #ff477e;
+      --success: #52ff9a;
+      --shadow: rgba(0, 255, 128, .16);
     }
     * { box-sizing: border-box; }
+    ::selection { background: var(--accent); color: #00170c; }
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        linear-gradient(rgba(57,255,136,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57,255,136,.035) 1px, transparent 1px),
+        radial-gradient(circle at 18% 5%, rgba(0,229,255,.11), transparent 28%),
+        radial-gradient(circle at 85% 15%, rgba(57,255,136,.12), transparent 26%),
+        var(--bg);
+      background-size: 32px 32px, 32px 32px, auto, auto, auto;
       color: var(--text);
-      font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
+      font-family: Consolas, "Cascadia Code", "Malgun Gothic", monospace;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 99;
+      opacity: .1;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 3px,
+        rgba(57,255,136,.11) 4px
+      );
     }
     main {
       width: min(1080px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 34px 0;
+      padding: 40px 0 54px;
     }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: 0 16px 36px rgba(29, 40, 43, .08);
-      padding: 28px;
+      border-radius: 2px;
+      box-shadow:
+        0 0 0 1px rgba(0,229,255,.06) inset,
+        0 0 38px var(--shadow),
+        0 30px 80px rgba(0,0,0,.55);
+      padding: 30px;
+      position: relative;
+      backdrop-filter: blur(12px);
+    }
+    .panel::before,
+    .panel::after {
+      content: "";
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      pointer-events: none;
+    }
+    .panel::before {
+      top: -1px;
+      left: -1px;
+      border-top: 2px solid var(--accent-hot);
+      border-left: 2px solid var(--accent-hot);
+    }
+    .panel::after {
+      right: -1px;
+      bottom: -1px;
+      border-right: 2px solid var(--accent-2);
+      border-bottom: 2px solid var(--accent-2);
     }
     .eyebrow {
       margin: 0 0 8px;
       color: var(--accent);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 800;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      text-shadow: 0 0 12px rgba(57,255,136,.7);
     }
-    h1 { margin: 0; font-size: clamp(28px, 4vw, 40px); letter-spacing: 0; }
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 48px);
+      letter-spacing: -.04em;
+      color: #f0fff6;
+      text-shadow: 0 0 20px rgba(57,255,136,.2);
+    }
+    h1::after {
+      content: "_";
+      color: var(--accent-hot);
+      animation: blink 1s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
     .sub { margin: 10px 0 0; color: var(--muted); line-height: 1.6; }
     form {
       display: grid;
@@ -671,9 +751,10 @@ PAGE_TEMPLATE = """
     .span3 { grid-column: span 3; }
     .span6 { grid-column: span 6; }
     label {
-      color: var(--muted);
+      color: var(--accent);
       font-size: 13px;
       font-weight: 800;
+      letter-spacing: .06em;
     }
     .help {
       min-height: 42px;
@@ -684,38 +765,54 @@ PAGE_TEMPLATE = """
     .fixed-scope {
       grid-column: span 6;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #f8fbfa;
+      border-left: 3px solid var(--accent-hot);
+      border-radius: 0;
+      background: rgba(8, 34, 24, .72);
       padding: 14px 16px;
       color: var(--muted);
       line-height: 1.6;
     }
     .fixed-scope strong {
-      color: var(--text);
+      color: var(--accent-hot);
     }
     input, select, button {
       width: 100%;
       min-height: 44px;
-      border-radius: 6px;
+      border-radius: 2px;
       font: inherit;
     }
     input, select {
       border: 1px solid var(--line);
       padding: 0 12px;
-      background: #fff;
+      background: #03110c;
+      color: var(--text);
+      outline: none;
+      box-shadow: inset 0 0 16px rgba(0,0,0,.28);
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(57,255,136,.13), 0 0 18px rgba(57,255,136,.14);
     }
     button {
-      border: 0;
-      background: var(--accent);
-      color: #fff;
+      border: 1px solid var(--accent);
+      background: linear-gradient(135deg, rgba(57,255,136,.92), rgba(0,229,255,.8));
+      color: #00150b;
       font-weight: 900;
       cursor: pointer;
+      letter-spacing: .06em;
+      box-shadow: 0 0 22px rgba(57,255,136,.24);
+      transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
     }
-    button:hover { background: var(--accent-dark); }
+    button:hover {
+      transform: translateY(-2px);
+      filter: saturate(1.3) brightness(1.08);
+      box-shadow: 0 0 34px rgba(57,255,136,.42);
+    }
+    button:disabled { opacity: .55; cursor: wait; transform: none; }
     .messages { display: grid; gap: 8px; margin-top: 20px; }
-    .message { margin: 0; padding: 12px 14px; border-radius: 6px; font-weight: 800; }
-    .error { color: var(--danger); background: #fff1f1; }
-    .success { color: var(--success); background: #edf9f2; }
+    .message { margin: 0; padding: 12px 14px; border-radius: 0; font-weight: 800; }
+    .error { color: #ffd1df; background: rgba(255,71,126,.12); border-left: 3px solid var(--danger); }
+    .success { color: #d8ffe8; background: rgba(82,255,154,.1); border-left: 3px solid var(--success); }
     .result {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -725,16 +822,25 @@ PAGE_TEMPLATE = """
     .dashboard-title {
       margin: 26px 0 0;
       font-size: 24px;
-      letter-spacing: 0;
+      letter-spacing: .04em;
+      color: var(--accent);
+      text-shadow: 0 0 12px rgba(57,255,136,.35);
     }
     .metric {
-      background: #f8fbfa;
+      background: linear-gradient(145deg, rgba(9,35,25,.94), rgba(3,17,12,.9));
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 0;
       padding: 16px;
+      box-shadow: inset 0 0 20px rgba(57,255,136,.025);
     }
     .metric dt { color: var(--muted); font-weight: 800; font-size: 13px; }
-    .metric dd { margin: 6px 0 0; font-size: 20px; font-weight: 900; }
+    .metric dd {
+      margin: 6px 0 0;
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--accent-hot);
+      text-shadow: 0 0 12px rgba(217,255,0,.3);
+    }
     .download {
       display: inline-flex;
       margin-top: 18px;
@@ -742,11 +848,13 @@ PAGE_TEMPLATE = """
       align-items: center;
       justify-content: center;
       padding: 0 18px;
-      border-radius: 6px;
-      background: var(--accent);
-      color: #fff;
+      border-radius: 2px;
+      border: 1px solid var(--accent);
+      background: rgba(57,255,136,.13);
+      color: var(--accent);
       font-weight: 900;
       text-decoration: none;
+      box-shadow: 0 0 18px rgba(57,255,136,.12);
     }
     .top-actions {
       display: flex;
@@ -760,12 +868,12 @@ PAGE_TEMPLATE = """
       align-items: center;
       justify-content: center;
       padding: 0 18px;
-      border-radius: 6px;
-      border: 1px solid var(--accent);
-      color: var(--accent-dark);
+      border-radius: 2px;
+      border: 1px solid var(--accent-2);
+      color: var(--accent-2);
       font-weight: 900;
       text-decoration: none;
-      background: #fff;
+      background: rgba(0,229,255,.06);
     }
     .visuals {
       display: grid;
@@ -775,9 +883,10 @@ PAGE_TEMPLATE = """
     }
     .chart-card {
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
+      border-radius: 0;
+      background: var(--panel-2);
       padding: 16px;
+      box-shadow: 0 0 24px rgba(0,229,255,.06);
     }
     .chart-card h3 {
       margin: 0 0 12px;
@@ -793,13 +902,13 @@ PAGE_TEMPLATE = """
       margin-top: 18px;
       overflow: auto;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 0;
     }
     table {
       width: 100%;
       border-collapse: collapse;
       min-width: 760px;
-      background: #fff;
+      background: #04110d;
     }
     th, td {
       border-bottom: 1px solid var(--line);
@@ -809,10 +918,14 @@ PAGE_TEMPLATE = """
       font-size: 13px;
     }
     th {
-      background: #eef5f4;
-      color: #24423d;
+      background: #0a2b1e;
+      color: var(--accent);
       font-weight: 900;
+      position: sticky;
+      top: 0;
+      box-shadow: 0 1px 0 var(--accent);
     }
+    tbody tr:hover { background: rgba(57,255,136,.06); }
     .loading {
       position: fixed;
       inset: 0;
@@ -820,16 +933,18 @@ PAGE_TEMPLATE = """
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(15, 23, 42, .45);
+      background: rgba(0, 5, 3, .82);
+      backdrop-filter: blur(8px);
       padding: 20px;
     }
     .loading.active { display: flex; }
     .loading-box {
       width: min(460px, 100%);
-      border-radius: 8px;
-      background: #fff;
+      border: 1px solid var(--accent);
+      border-radius: 0;
+      background: #06150f;
       padding: 24px;
-      box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+      box-shadow: 0 0 60px rgba(57,255,136,.28);
     }
     .loading-title {
       margin: 0 0 8px;
@@ -840,20 +955,22 @@ PAGE_TEMPLATE = """
       height: 12px;
       overflow: hidden;
       border-radius: 999px;
-      background: #dbe4e7;
+      background: #001c10;
       margin-top: 16px;
     }
     .bar-fill {
       width: 0%;
       height: 100%;
-      background: var(--accent);
+      background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-hot));
+      box-shadow: 0 0 16px var(--accent);
       transition: width .35s ease;
     }
     .percent {
       margin-top: 10px;
       font-size: 28px;
       font-weight: 900;
-      color: var(--accent-dark);
+      color: var(--accent-hot);
+      text-shadow: 0 0 16px rgba(217,255,0,.5);
     }
     .guide {
       margin-top: 22px;
@@ -872,7 +989,7 @@ PAGE_TEMPLATE = """
       line-height: 1.7;
     }
     .guide a {
-      color: var(--accent-dark);
+      color: var(--accent-2);
       font-weight: 900;
     }
     .note {
@@ -886,6 +1003,7 @@ PAGE_TEMPLATE = """
       .panel { padding: 18px; }
       form, .result, .visuals { grid-template-columns: 1fr; }
       .span2, .span3, .span6, .fixed-scope { grid-column: auto; }
+      h1 { font-size: 30px; }
     }
   </style>
 </head>
@@ -1049,11 +1167,29 @@ DOC_TEMPLATE = """
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>프로그램 상세 설명</title>
   <style>
+    :root {
+      color-scheme: dark;
+      --bg: #020806;
+      --panel: rgba(5, 22, 16, .94);
+      --text: #e7fff1;
+      --muted: #82b89b;
+      --line: rgba(57,255,136,.32);
+      --green: #39ff88;
+      --cyan: #00e5ff;
+      --lime: #d9ff00;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: #f3f6f5;
-      color: #1d282b;
-      font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(57,255,136,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57,255,136,.035) 1px, transparent 1px),
+        radial-gradient(circle at 15% 0, rgba(0,229,255,.12), transparent 30%),
+        var(--bg);
+      background-size: 32px 32px, 32px 32px, auto, auto;
+      color: var(--text);
+      font-family: Consolas, "Cascadia Code", "Malgun Gothic", monospace;
       line-height: 1.65;
     }
     main {
@@ -1062,34 +1198,44 @@ DOC_TEMPLATE = """
       padding: 32px 0 56px;
     }
     article {
-      background: #fff;
-      border: 1px solid #d8e2e3;
-      border-radius: 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 0;
       padding: 30px;
-      box-shadow: 0 16px 36px rgba(29, 40, 43, .08);
+      box-shadow: 0 0 38px rgba(57,255,136,.13), 0 30px 80px rgba(0,0,0,.5);
     }
     h1, h2, h3 { letter-spacing: 0; line-height: 1.3; }
-    h1 { margin-top: 0; font-size: 34px; }
-    h2 { margin-top: 30px; padding-top: 18px; border-top: 1px solid #d8e2e3; }
+    h1 { margin-top: 0; font-size: 34px; color: var(--green); text-shadow: 0 0 16px rgba(57,255,136,.3); }
+    h2 { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--lime); }
+    h3 { color: var(--cyan); }
+    p, li { color: var(--muted); }
     code, pre {
       font-family: Consolas, "Courier New", monospace;
-      background: #eef5f4;
-      border-radius: 6px;
+      background: #03110c;
+      color: var(--green);
+      border: 1px solid var(--line);
+      border-radius: 0;
     }
     code { padding: 2px 5px; }
     pre { padding: 14px; overflow: auto; }
-    a { color: #096653; font-weight: 800; }
+    a { color: var(--cyan); font-weight: 800; }
     .back {
       display: inline-flex;
       margin-bottom: 16px;
       min-height: 42px;
       align-items: center;
       padding: 0 16px;
-      border-radius: 6px;
-      background: #0b8069;
-      color: #fff;
+      border-radius: 0;
+      border: 1px solid var(--green);
+      background: rgba(57,255,136,.12);
+      color: var(--green);
       text-decoration: none;
       font-weight: 900;
+      box-shadow: 0 0 18px rgba(57,255,136,.12);
+    }
+    @media (max-width: 700px) {
+      main { width: min(100% - 20px, 960px); padding: 16px 0 32px; }
+      article { padding: 20px; }
     }
   </style>
 </head>

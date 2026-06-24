@@ -19,6 +19,18 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
         self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
 
+    def test_cyberpunk_theme_is_rendered(self):
+        client = dashboard.app.test_client()
+        response = client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"--accent: #39ff88", response.data)
+        self.assertIn(b"--accent-2: #00e5ff", response.data)
+        self.assertIn(b"repeating-linear-gradient", response.data)
+
+        docs_response = client.get("/docs")
+        self.assertEqual(docs_response.status_code, 200)
+        self.assertIn(b"--green: #39ff88", docs_response.data)
+
     def test_parse_date(self):
         self.assertEqual(dashboard.parse_yyyymmdd("2026-06-24"), date(2026, 6, 24))
 
