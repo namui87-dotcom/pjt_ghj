@@ -2,7 +2,9 @@ import base64
 import json
 import os
 import re
+import secrets
 import threading
+import time
 import webbrowser
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -60,9 +62,12 @@ METADATA_COLUMNS = [
     "buyer",
 ]
 
-OUTPUT_ROOT = Path("outputs")
-DOC_PATH = Path("프로그램_상세설명.md")
-LAST_OUTPUT_PATH: Path | None = None
+BASE_DIR = Path(__file__).resolve().parent
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+OUTPUT_ROOT = Path("/tmp/outputs") if IS_VERCEL else BASE_DIR / "outputs"
+DOC_PATH = BASE_DIR / "프로그램_상세설명.md"
+DOWNLOADS: dict[str, tuple[Path, float]] = {}
+DOWNLOAD_TTL_SECONDS = 30 * 60
 RECENT_TRADING_DAYS = 5
 MAX_CALENDAR_LOOKBACK = 20
 REQUEST_TIMEOUT = 30
@@ -86,6 +91,7 @@ class RunResult:
     trading_dates: list[str]
     charts: list[dict[str, str]]
     top_rows: list[dict[str, Any]]
+    download_token: str = ""
 
 
 class KrxInvestorApi:
@@ -395,6 +401,20 @@ def create_visualizations(last_df: pd.DataFrame) -> list[dict[str, str]]:
         ax.grid(alpha=0.25)
         add_chart(charts, "외국인 vs 기관합계", fig)
 
+        top20_idx = df_clean[("1개월누적", "외국인")].nlargest(20).index
+        heat_df = df_clean.loc[top20_idx].copy()
+        heat_df.columns = [f"{period}_{buyer}" for period, buyer in heat_df.columns]
+        heat_df.index = stock_names_from_index(heat_df.index)
+        fig, ax = plt.subplots(figsize=(13, 8))
+        image = ax.imshow(heat_df.values, aspect="auto", cmap="coolwarm")
+        ax.set_title("외국인 순매수 TOP20 기간별 수급 히트맵")
+        ax.set_xticks(range(len(heat_df.columns)))
+        ax.set_xticklabels(heat_df.columns, rotation=45, ha="right")
+        ax.set_yticks(range(len(heat_df.index)))
+        ax.set_yticklabels(heat_df.index)
+        fig.colorbar(image, ax=ax, label="순매수 수량")
+        add_chart(charts, "TOP20 기간별 수급 히트맵", fig)
+
     recent_periods = [
         period
         for period in ["10일전", "9일전", "8일전", "7일전", "6일전", "5일전", "4일전", "3일전", "2일전", "1일전"]
@@ -478,15 +498,12 @@ def write_outputs(base_df: pd.DataFrame, last_df: pd.DataFrame, out_dir: Path, n
 def run_collection(
     krx_id: str,
     krx_pw: str,
-    openapi_key: str,
     as_of: date,
     market: str,
     output_root: Path,
 ) -> RunResult:
     if not krx_id or not krx_pw:
         raise ValueError("KRX 아이디와 비밀번호를 모두 입력해야 합니다.")
-    if not openapi_key:
-        raise ValueError("OpenAPI 키를 입력해야 합니다.")
 
     now = datetime.now()
     out_dir = output_root / now.strftime("%Y%m%d")
@@ -524,6 +541,21 @@ def run_collection(
         charts=charts,
         top_rows=top_rows,
     )
+
+
+def register_download(output_path: Path) -> str:
+    now = time.time()
+    expired = [token for token, (_, created_at) in DOWNLOADS.items() if now - created_at > DOWNLOAD_TTL_SECONDS]
+    for token in expired:
+        old_path, _ = DOWNLOADS.pop(token)
+        try:
+            old_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    token = secrets.token_urlsafe(24)
+    DOWNLOADS[token] = (output_path, now)
+    return token
 
 
 app = Flask(__name__)
@@ -811,7 +843,7 @@ PAGE_TEMPLATE = """
     <section class="panel">
       <p class="eyebrow">GHJ Codex V.03</p>
       <h1>오늘 기준 KRX 수급 분석</h1>
-      <p class="sub">아이디, 비밀번호, OpenAPI 키만 입력하면 기존 노트북처럼 누적 구간과 최근 일별 수급을 한 번에 조회하고 기본 시각화까지 바로 보여줍니다.</p>
+      <p class="sub">KRX 아이디와 비밀번호를 입력하면 기존 노트북처럼 누적 구간과 최근 일별 수급을 한 번에 조회하고 기본 시각화까지 바로 보여줍니다.</p>
       <div class="top-actions">
         <a class="secondary-link" href="/docs" target="_blank" rel="noopener">프로그램 상세 설명 보기</a>
       </div>
@@ -836,11 +868,6 @@ PAGE_TEMPLATE = """
           <label for="krx_pw">KRX 비밀번호</label>
           <input id="krx_pw" name="krx_pw" type="password" autocomplete="current-password" required>
           <span class="help">조회 때만 사용하고 파일에 저장하지 않습니다.</span>
-        </div>
-        <div class="field span2">
-          <label for="openapi_key">OpenAPI 키</label>
-          <input id="openapi_key" name="openapi_key" type="password" value="{{ form.openapi_key }}" required>
-          <span class="help">KRX OpenAPI 사이트에서 발급받은 인증키입니다.</span>
         </div>
         <div class="field span2">
           <label for="as_of">기준일</label>
@@ -876,7 +903,7 @@ PAGE_TEMPLATE = """
           <div class="metric"><dt>저장 파일</dt><dd>완료</dd></div>
         </dl>
         <p class="sub">자동 분석 범위: 기관합계/외국인 6개월 누적, 3개월 누적, 1개월 누적, 최근 거래일 {{ result.trading_dates | length }}개 일별 데이터. 최근 거래일: {{ ", ".join(result.trading_dates) }}</p>
-        <a class="download" href="/download">엑셀 다운로드</a>
+        <a class="download" href="/download/{{ result.download_token }}">엑셀 다운로드</a>
 
         {% if result.charts %}
           <section class="visuals">
@@ -917,12 +944,11 @@ PAGE_TEMPLATE = """
         <h2>처음 사용하는 사람 준비 방법</h2>
         <ol>
           <li><a href="https://data.krx.co.kr/" target="_blank" rel="noopener">KRX 정보데이터시스템</a>에서 회원가입 후 아이디와 비밀번호를 준비합니다.</li>
-          <li><a href="https://openapi.krx.co.kr/" target="_blank" rel="noopener">KRX OpenAPI 전용 사이트</a>에 접속합니다.</li>
-          <li>OpenAPI 사이트에서 로그인 후 인증키 또는 API Key 발급/신청 메뉴로 이동합니다.</li>
-          <li>발급된 API 키를 복사해 이 화면의 OpenAPI 키 입력칸에 붙여넣습니다.</li>
-          <li>기준일과 시장을 선택한 뒤 수집 시작을 누르면 통합 엑셀 파일이 생성됩니다.</li>
+          <li>이 화면에 KRX 아이디와 비밀번호를 입력합니다. 비밀번호는 해당 조회 요청 동안만 사용됩니다.</li>
+          <li>기준일과 시장을 선택한 뒤 전체 분석 실행을 누르면 누적·최근 거래일 데이터가 수집됩니다.</li>
+          <li>분석이 끝나면 차트와 주요 종목을 확인하고 통합 Excel 파일을 내려받습니다.</li>
         </ol>
-        <p class="note">OpenAPI 발급 주소는 https://openapi.krx.co.kr 입니다. KRX 정보데이터시스템 메인에서도 OpenAPI 링크를 통해 이동할 수 있습니다. 메뉴명이 바뀌면 OpenAPI, API Key, 인증키, 활용신청 같은 단어로 찾아보세요.</p>
+        <p class="note">이 버전은 Selenium이나 별도의 OpenAPI 키 없이 KRX 로그인 세션과 정보데이터시스템 JSON 요청을 사용합니다. KRX 사이트 정책이나 요청 형식이 변경되면 수집 모듈도 함께 수정해야 합니다.</p>
       </section>
     </section>
   </main>
@@ -1022,7 +1048,6 @@ DOC_TEMPLATE = """
 def default_form() -> dict[str, Any]:
     return {
         "krx_id": "",
-        "openapi_key": "",
         "as_of": date.today().isoformat(),
         "market": "ALL",
     }
@@ -1030,15 +1055,12 @@ def default_form() -> dict[str, Any]:
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    global LAST_OUTPUT_PATH
-
     form = default_form()
     result = None
 
     if flask_request.method == "POST":
         form.update({
             "krx_id": flask_request.form.get("krx_id", "").strip(),
-            "openapi_key": flask_request.form.get("openapi_key", "").strip(),
             "as_of": flask_request.form.get("as_of", form["as_of"]).strip(),
             "market": flask_request.form.get("market", "ALL").strip().upper(),
         })
@@ -1048,13 +1070,20 @@ def index():
             result = run_collection(
                 krx_id=form["krx_id"],
                 krx_pw=krx_pw,
-                openapi_key=form["openapi_key"],
                 as_of=parse_yyyymmdd(form["as_of"]),
                 market=form["market"],
                 output_root=OUTPUT_ROOT,
             )
-            LAST_OUTPUT_PATH = result.output_path
-            flash(f"수집 완료: {result.output_path}", "success")
+            result = RunResult(
+                output_path=result.output_path,
+                base_rows=result.base_rows,
+                last_rows=result.last_rows,
+                trading_dates=result.trading_dates,
+                charts=result.charts,
+                top_rows=result.top_rows,
+                download_token=register_download(result.output_path),
+            )
+            flash("수집과 분석이 완료되었습니다. 엑셀 파일은 30분 동안 다운로드할 수 있습니다.", "success")
         except Exception as exc:
             flash(str(exc), "error")
 
@@ -1066,12 +1095,26 @@ def index():
     )
 
 
-@app.route("/download")
-def download():
-    if not LAST_OUTPUT_PATH or not LAST_OUTPUT_PATH.exists():
-        flash("다운로드할 결과 파일이 없습니다.", "error")
-        return render_template_string(PAGE_TEMPLATE, form=default_form(), markets=MARKET_CODES.keys(), result=None)
-    return send_file(LAST_OUTPUT_PATH, as_attachment=True, download_name=LAST_OUTPUT_PATH.name)
+@app.route("/download/<token>")
+def download(token: str):
+    entry = DOWNLOADS.get(token)
+    if not entry:
+        return "다운로드 링크가 만료되었거나 다른 서버 인스턴스로 전환되었습니다. 분석을 다시 실행해 주세요.", 404
+
+    output_path, created_at = entry
+    if time.time() - created_at > DOWNLOAD_TTL_SECONDS or not output_path.exists():
+        DOWNLOADS.pop(token, None)
+        return "다운로드 링크가 만료되었습니다. 분석을 다시 실행해 주세요.", 410
+    return send_file(output_path, as_attachment=True, download_name=output_path.name)
+
+
+@app.route("/health")
+def health():
+    return {
+        "status": "ok",
+        "runtime": "vercel" if IS_VERCEL else "local",
+        "recent_trading_days": RECENT_TRADING_DAYS,
+    }
 
 
 def markdown_to_html(markdown_text: str) -> str:

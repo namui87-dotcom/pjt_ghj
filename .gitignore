@@ -16,8 +16,8 @@ test_output_full/
 *.xlsx
 
 # Tool and OS files
+.vercel/
 .pytest_cache/
 .mypy_cache/
 .DS_Store
 Thumbs.db
-
